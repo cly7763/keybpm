@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://bpm.createdmk.com/sitemap.xml
+Sitemap: https://keyandbpm.createdmk.com/sitemap.xml
