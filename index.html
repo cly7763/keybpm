@@ -196,7 +196,7 @@
     <div class="drop-zone" id="dropZone">
       <span class="drop-icon" id="dropIcon">🎵</span>
       <div class="drop-label" id="dropLabel">오디오 파일 드롭 또는 클릭하여 업로드</div>
-      <div class="drop-sub" id="dropSub">MP3, WAV, FLAC, M4A 지원 (최대 45초 고정밀 분석)</div>
+      <div class="drop-sub" id="dropSub">MP3, WAV, FLAC, M4A 지원</div>
       <input type="file" id="fileInput" accept="audio/*" style="display: none;" />
     </div>
 
@@ -259,7 +259,6 @@
       'Db minor': '12A', 'C# minor': '12A', 'E major': '12B'
     };
 
-    // 상태 갱신 및 UI 렌더링 보장 함수
     function setProgress(text, isLoading = true) {
       statusText.innerText = text;
       if (isLoading) {
@@ -270,7 +269,6 @@
       return new Promise(resolve => setTimeout(resolve, 50));
     }
 
-    // 1. Essentia WASM 초기화
     EssentiaWASM().then((wasmModule) => {
       essentia = new Essentia(wasmModule);
       setProgress('준비 완료: 음원을 올려주세요.', false);
@@ -279,7 +277,6 @@
       console.error(err);
     });
 
-    // 드래그 앤 드롭 이벤트
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
@@ -292,14 +289,12 @@
       if (e.target.files.length) processAudio(e.target.files[0]);
     });
 
-    // 2. 오디오 고정밀 분석 파이프라인
     async function processAudio(file) {
       if (!essentia) {
         alert('분석 엔진이 아직 로딩 중입니다. 잠시 후 다시 시도해주세요.');
         return;
       }
 
-      // 로딩 UI 활성화
       dropZone.classList.add('analyzing');
       keyBox.classList.add('loading');
       bpmBox.classList.add('loading');
@@ -320,51 +315,40 @@
         const originalBuffer = await tempAudioCtx.decodeAudioData(arrayBuffer);
         tempAudioCtx.close();
 
-        await setProgress('정밀 분석을 위해 44.1kHz로 리샘플링 중...', true);
+        await setProgress('44.1kHz 리샘플링 및 파형 추출 중...', true);
 
-        // 44.1kHz 고정 리샘플링 (피치 왜곡 원천 차단)
+        // 44.1kHz 정밀 리샘플링 (곡의 중심부 최대 45초 분석)
         const TARGET_SAMPLE_RATE = 44100;
-        const duration = Math.min(originalBuffer.duration, 45);
-        const offlineCtx = new OfflineAudioContext(1, Math.floor(TARGET_SAMPLE_RATE * duration), TARGET_SAMPLE_RATE);
-        
+        const totalDuration = originalBuffer.duration;
+        const sliceDuration = Math.min(totalDuration, 45);
+        const startTime = totalDuration > 50 ? 5 : 0; // 초반 무음/노이즈 건너뛰기
+
+        const offlineCtx = new OfflineAudioContext(1, Math.floor(TARGET_SAMPLE_RATE * sliceDuration), TARGET_SAMPLE_RATE);
         const source = offlineCtx.createBufferSource();
         source.buffer = originalBuffer;
         source.connect(offlineCtx.destination);
-        source.start(0);
+        source.start(0, startTime, sliceDuration);
         
         const resampledBuffer = await offlineCtx.startRendering();
         const channelData = resampledBuffer.getChannelData(0);
 
-        // 파형 시각화
         drawWaveform(channelData);
 
-        await setProgress('화성(HPCP) 및 BPM 알고리즘 연산 중...', true);
+        await setProgress('BPM 및 Key(화성) 알고리즘 연산 중...', true);
+        await new Promise(resolve => setTimeout(resolve, 60));
 
         const vectorSignal = essentia.arrayToVector(channelData);
 
-        // 1. BPM 연산
+        // 1. BPM 분석
         const bpmResult = essentia.PercivalBpmEstimator(vectorSignal, TARGET_SAMPLE_RATE);
         const estimatedBpm = Math.round(bpmResult.bpm);
 
-        // 2. KeyExtractor 표준 파라미터 호출 (WASM 바인딩 순서 정밀 매핑)
-        // 시그니처: (signal, averageDetuningUse, frameSize, hopSize, hpcpSize, maxFrequency, minFrequency, profileType, sampleRate, tuningFrequency)
-        const keyResult = essentia.KeyExtractor(
-          vectorSignal,
-          true,        // averageDetuningUse
-          4096,        // frameSize
-          4096,        // hopSize
-          12,          // hpcpSize
-          5000,        // maxFrequency
-          25,          // minFrequency
-          'edma',      // profileType: 'edma'
-          44100,       // sampleRate
-          440          // tuningFrequency
-        );
+        // 2. Key 분석 (안전한 표준 KeyExtractor 호출)
+        const keyResult = essentia.KeyExtractor(vectorSignal);
 
         const detectedKeyStr = `${keyResult.key} ${keyResult.scale}`;
         const camelotCode = camelotMap[detectedKeyStr] || '-';
 
-        // 결과 반영
         bpmVal.innerText = estimatedBpm;
         bpmConfidence.innerText = `BPM 신뢰도: ${(bpmResult.confidence || 0.95).toFixed(2)}`;
         
@@ -373,7 +357,6 @@
 
         await setProgress(`분석 완료 (${file.name})`, false);
 
-        // 메모리 해제
         vectorSignal.delete();
       } catch (error) {
         console.error(error);
@@ -388,12 +371,11 @@
         bpmBox.classList.remove('loading');
         dropIcon.innerText = '🎵';
         dropLabel.innerText = '오디오 파일 드롭 또는 클릭하여 업로드';
-        dropSub.innerText = 'MP3, WAV, FLAC, M4A 지원 (최대 45초 고정밀 분석)';
+        dropSub.innerText = 'MP3, WAV, FLAC, M4A 지원';
         fileInput.value = '';
       }
     }
 
-    // 파형 시각화
     function drawWaveform(data) {
       canvas.style.display = 'block';
       canvas.width = canvas.offsetWidth;
@@ -419,7 +401,6 @@
       }
     }
 
-    // 3. 수동 탭 템포 (Tap BPM)
     let tapTimes = [];
     const tapBtn = document.getElementById('tapBtn');
     tapBtn.addEventListener('click', () => {
