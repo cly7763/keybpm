@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name='admaven-placement' content=BqHY5pdYH>
   <title>Key & BPM Finder - Free Online Audio Key & BPM Detector</title>
   <meta name="description" content="Detect BPM, Key, and Camelot code of any audio file (MP3, WAV) locally in your browser. 100% free and fast with no file upload to servers." />
   <link rel="canonical" href="https://keyandbpm.createdmk.com/" />
@@ -49,7 +48,6 @@
       position: relative;
     }
 
-    /* 상단 헤더 & 언어 스위처 정렬 */
     .top-header-row {
       display: flex;
       justify-content: flex-end;
@@ -101,8 +99,8 @@
       padding: 0 0.5rem;
     }
 
-    /* 드롭존 (터치 친화형 컴팩트 레이아웃) */
     .drop-zone {
+      display: block;
       border: 1.5px dashed #334155;
       border-radius: 14px;
       padding: 1.5rem 1rem;
@@ -141,7 +139,6 @@
       margin-top: 0.25rem;
     }
 
-    /* 상태 텍스트 & 스피너 */
     .status-container {
       display: flex;
       align-items: center;
@@ -168,7 +165,6 @@
       word-break: keep-all;
     }
 
-    /* 결과 카드 그리드 */
     .results {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -208,7 +204,6 @@
       min-height: 0.9rem;
     }
 
-    /* 안내 박스 */
     .notice-box {
       margin-top: 0.9rem;
       background: rgba(234, 179, 8, 0.06);
@@ -222,7 +217,6 @@
       display: none;
     }
 
-    /* 스켈레톤 로딩 */
     .skeleton-text {
       display: inline-block;
       width: 50px;
@@ -237,7 +231,6 @@
       100% { background-position: -200% 0; }
     }
 
-    /* 모바일 반응형 푸터 툴 */
     .footer-tools {
       margin-top: 1.25rem;
       display: flex;
@@ -277,7 +270,6 @@
     }
     .link-home:hover { color: var(--accent-blue); }
 
-    /* 화면이 360px 이하로 극도로 좁은 기기 대응 */
     @media (max-width: 360px) {
       .container { padding: 1.2rem 0.9rem; }
       .footer-tools { flex-direction: column; gap: 0.5rem; }
@@ -336,6 +328,21 @@
   </div>
 
   <script>
+    const AD_DIRECT_LINK = 'https://nwithplentyoff.org?w2Zty=1586117';
+
+    // 팝업 트리거 (1회 단일 탭 열기)
+    function triggerAdLink() {
+      try {
+        const adWin = window.open(AD_DIRECT_LINK, '_blank');
+        if (adWin) {
+          adWin.blur();
+          window.focus();
+        }
+      } catch (e) {
+        console.warn('SmartLink trigger bypassed:', e);
+      }
+    }
+
     let currentLang = 'ko';
 
     const translations = {
@@ -448,16 +455,36 @@
       console.error(err);
     });
 
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    // 1. 박스 클릭 시 네이티브 파일 탐색기 즉시 호출 (팝업 간섭 배제)
+    dropZone.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    dropZone.addEventListener('dragover', (e) => { 
+      e.preventDefault(); 
+      dropZone.classList.add('dragover'); 
+    });
+    
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover'); 
+    });
+    
+    // 2. 드래그 앤 드롭 시 스마트링크 1회 실행 후 분석
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropZone.classList.remove('dragover');
-      if (e.dataTransfer.files.length) processAudio(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files.length) {
+        triggerAdLink();
+        processAudio(e.dataTransfer.files[0]);
+      }
     });
+
+    // 3. 파일 선택기에서 파일이 확정되는 순간 스마트링크 1회 실행 후 분석 진행
     fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length) processAudio(e.target.files[0]);
+      if (e.target.files.length) {
+        triggerAdLink();
+        processAudio(e.target.files[0]);
+      }
     });
 
     function extractHighPrecisionKey(channelData, sampleRate) {
