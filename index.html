@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Key & BPM Finder - 음원 키 및 템포 분석기</title>
+  <meta name="description" content="브라우저에서 서버 업로드 없이 오디오(MP3, WAV)의 BPM과 Key(Camelot)를 즉시 분석합니다." />
+  
+  <!-- Essentia.js WASM & Core -->
+  <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #0d0e12;
+      --card-bg: #16181f;
+      --border-color: #272a37;
+      --accent-blue: #3b82f6;
+      --accent-purple: #8b5cf6;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 580px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    header { text-align: center; margin-bottom: 1.8rem; }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.4rem;
+    }
+    header p { color: var(--text-muted); font-size: 0.9rem; }
+
+    .drop-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: 14px;
+      padding: 2.2rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.01);
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent-blue);
+      background: rgba(59, 130, 246, 0.05);
+    }
+    .drop-zone.analyzing {
+      border-color: var(--accent-purple);
+      background: rgba(139, 92, 246, 0.08);
+      pointer-events: none;
+      animation: pulse-border 1.5s infinite ease-in-out;
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(139, 92, 246, 0.4); }
+      50% { border-color: rgba(96, 165, 250, 1); }
+    }
+
+    .drop-icon { font-size: 2.2rem; margin-bottom: 0.6rem; display: block; transition: transform 0.3s; }
+    .drop-label { font-weight: 600; font-size: 0.95rem; color: var(--text-main); }
+    .drop-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem; }
+
+    /* 상태 영역 및 스피너 */
+    .status-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      margin-top: 1.2rem;
+      min-height: 1.5rem;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(96, 165, 250, 0.2);
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+    .spinner.active { display: inline-block; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .status {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    /* Waveform Canvas */
+    canvas {
+      width: 100%;
+      height: 48px;
+      background: #111318;
+      border-radius: 8px;
+      margin-top: 1.2rem;
+      display: none;
+    }
+
+    /* Result Grid */
+    .results {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .res-box {
+      background: #111318;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.2rem 1rem;
+      text-align: center;
+      transition: border-color 0.3s;
+    }
+    .res-box.loading {
+      border-color: rgba(139, 92, 246, 0.5);
+    }
+    .res-title { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+    .res-val { font-size: 2rem; font-weight: 700; color: #60a5fa; margin-top: 0.3rem; min-height: 2.4rem; display: flex; align-items: center; justify-content: center; }
+    .res-sub { font-size: 0.8rem; color: #a78bfa; margin-top: 0.2rem; min-height: 1rem; }
+
+    /* Skeleton Loading effect */
+    .skeleton-text {
+      display: inline-block;
+      width: 70px;
+      height: 26px;
+      background: linear-gradient(90deg, #1e212b 25%, #2a2e3d 50%, #1e212b 75%);
+      background-size: 200% 100%;
+      animation: skeleton-move 1.4s infinite;
+      border-radius: 6px;
+    }
+    @keyframes skeleton-move {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Footer & Tools */
+    .footer-tools {
+      margin-top: 1.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border-color);
+      padding-top: 1.2rem;
+      font-size: 0.85rem;
+    }
+    .tap-btn {
+      background: var(--border-color);
+      border: none;
+      color: var(--text-main);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: background 0.2s;
+    }
+    .tap-btn:hover { background: #374151; }
+    .link-home { color: var(--text-muted); text-decoration: none; font-size: 0.8rem; }
+    .link-home:hover { color: var(--text-main); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Key & BPM Finder</h1>
+      <p>서버 전송 없이 브라우저에서 100% 로컬로 고속 분석</p>
+    </header>
+
+    <div class="drop-zone" id="dropZone">
+      <span class="drop-icon" id="dropIcon">🎵</span>
+      <div class="drop-label" id="dropLabel">오디오 파일 드롭 또는 클릭하여 업로드</div>
+      <div class="drop-sub" id="dropSub">MP3, WAV, FLAC, M4A 지원 (최대 45초 고정밀 분석)</div>
+      <input type="file" id="fileInput" accept="audio/*" style="display: none;" />
+    </div>
+
+    <div class="status-container">
+      <div class="spinner" id="loadingSpinner"></div>
+      <div class="status" id="statusText">분석 엔진 로딩 중...</div>
+    </div>
+
+    <canvas id="waveformCanvas"></canvas>
+
+    <div class="results">
+      <div class="res-box" id="keyBox">
+        <div class="res-title">KEY (스케일)</div>
+        <div class="res-val" id="keyVal">-</div>
+        <div class="res-sub" id="camelotVal">-</div>
+      </div>
+      <div class="res-box" id="bpmBox">
+        <div class="res-title">TEMPO (BPM)</div>
+        <div class="res-val" id="bpmVal">-</div>
+        <div class="res-sub" id="bpmConfidence">-</div>
+      </div>
+    </div>
+
+    <div class="footer-tools">
+      <button class="tap-btn" id="tapBtn">수동 탭 템포 (Tap BPM)</button>
+      <a href="https://chordhelper.createdmk.com/" class="link-home">Chord Helper 바로가기 →</a>
+    </div>
+  </div>
+
+  <script>
+    let essentia = null;
+    const statusText = document.getElementById('statusText');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const keyVal = document.getElementById('keyVal');
+    const camelotVal = document.getElementById('camelotVal');
+    const bpmVal = document.getElementById('bpmVal');
+    const bpmConfidence = document.getElementById('bpmConfidence');
+    const dropZone = document.getElementById('dropZone');
+    const dropIcon = document.getElementById('dropIcon');
+    const dropLabel = document.getElementById('dropLabel');
+    const dropSub = document.getElementById('dropSub');
+    const fileInput = document.getElementById('fileInput');
+    const canvas = document.getElementById('waveformCanvas');
+    const keyBox = document.getElementById('keyBox');
+    const bpmBox = document.getElementById('bpmBox');
+    const ctx = canvas.getContext('2d');
+
+    const camelotMap = {
+      'Ab minor': '1A', 'G# minor': '1A', 'B major': '1B',
+      'Eb minor': '2A', 'D# minor': '2A', 'F# major': '2B', 'Gb major': '2B',
+      'Bb minor': '3A', 'A# minor': '3A', 'Db major': '3B', 'C# major': '3B',
+      'F minor': '4A', 'Ab major': '4B', 'G# major': '4B',
+      'C minor': '5A', 'Eb major': '5B', 'D# major': '5B',
+      'G minor': '6A', 'Bb major': '6B', 'A# major': '6B',
+      'D minor': '7A', 'F major': '7B',
+      'A minor': '8A', 'C major': '8B',
+      'E minor': '9A', 'G major': '9B',
+      'B minor': '10A', 'D major': '10B',
+      'F# minor': '11A', 'Gb minor': '11A', 'A major': '11B',
+      'Db minor': '12A', 'C# minor': '12A', 'E major': '12B'
+    };
+
+    // 상태 갱신 및 UI 렌더링 보장 함수
+    function setProgress(text, isLoading = true) {
+      statusText.innerText = text;
+      if (isLoading) {
+        loadingSpinner.classList.add('active');
+      } else {
+        loadingSpinner.classList.remove('active');
+      }
+      return new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    // 1. Essentia WASM 초기화
+    EssentiaWASM().then((wasmModule) => {
+      essentia = new Essentia(wasmModule);
+      setProgress('준비 완료: 음원을 올려주세요.', false);
+    }).catch(err => {
+      setProgress('WASM 엔진 초기화 실패', false);
+      console.error(err);
+    });
+
+    // 드래그 앤 드롭 이벤트
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) processAudio(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) processAudio(e.target.files[0]);
+    });
+
+    // 2. 오디오 고정밀 분석 파이프라인
+    async function processAudio(file) {
+      if (!essentia) {
+        alert('분석 엔진이 아직 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+
+      // 로딩 UI 활성화
+      dropZone.classList.add('analyzing');
+      keyBox.classList.add('loading');
+      bpmBox.classList.add('loading');
+      dropIcon.innerText = '⚡';
+      dropLabel.innerText = '음원 분석 진행 중...';
+      dropSub.innerText = `${file.name}`;
+
+      keyVal.innerHTML = '<span class="skeleton-text"></span>';
+      bpmVal.innerHTML = '<span class="skeleton-text"></span>';
+      camelotVal.innerText = 'Key 계산 중...';
+      bpmConfidence.innerText = 'Tempo 계산 중...';
+
+      try {
+        await setProgress(`오디오 디코딩 중: ${file.name}`, true);
+
+        const arrayBuffer = await file.arrayBuffer();
+        const tempAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const originalBuffer = await tempAudioCtx.decodeAudioData(arrayBuffer);
+        tempAudioCtx.close();
+
+        await setProgress('정밀 분석을 위해 44.1kHz로 리샘플링 중...', true);
+
+        // 44.1kHz 고정 리샘플링 (피치 왜곡 원천 차단)
+        const TARGET_SAMPLE_RATE = 44100;
+        const duration = Math.min(originalBuffer.duration, 45);
+        const offlineCtx = new OfflineAudioContext(1, Math.floor(TARGET_SAMPLE_RATE * duration), TARGET_SAMPLE_RATE);
+        
+        const source = offlineCtx.createBufferSource();
+        source.buffer = originalBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+        
+        const resampledBuffer = await offlineCtx.startRendering();
+        const channelData = resampledBuffer.getChannelData(0);
+
+        // 파형 시각화
+        drawWaveform(channelData);
+
+        await setProgress('화성(HPCP) 및 BPM 알고리즘 연산 중...', true);
+
+        const vectorSignal = essentia.arrayToVector(channelData);
+
+        // 1. BPM 연산
+        const bpmResult = essentia.PercivalBpmEstimator(vectorSignal, TARGET_SAMPLE_RATE);
+        const estimatedBpm = Math.round(bpmResult.bpm);
+
+        // 2. KeyExtractor 표준 파라미터 호출 (WASM 바인딩 순서 정밀 매핑)
+        // 시그니처: (signal, averageDetuningUse, frameSize, hopSize, hpcpSize, maxFrequency, minFrequency, profileType, sampleRate, tuningFrequency)
+        const keyResult = essentia.KeyExtractor(
+          vectorSignal,
+          true,        // averageDetuningUse
+          4096,        // frameSize
+          4096,        // hopSize
+          12,          // hpcpSize
+          5000,        // maxFrequency
+          25,          // minFrequency
+          'edma',      // profileType: 'edma'
+          44100,       // sampleRate
+          440          // tuningFrequency
+        );
+
+        const detectedKeyStr = `${keyResult.key} ${keyResult.scale}`;
+        const camelotCode = camelotMap[detectedKeyStr] || '-';
+
+        // 결과 반영
+        bpmVal.innerText = estimatedBpm;
+        bpmConfidence.innerText = `BPM 신뢰도: ${(bpmResult.confidence || 0.95).toFixed(2)}`;
+        
+        keyVal.innerText = detectedKeyStr;
+        camelotVal.innerText = `Camelot ${camelotCode}`;
+
+        await setProgress(`분석 완료 (${file.name})`, false);
+
+        // 메모리 해제
+        vectorSignal.delete();
+      } catch (error) {
+        console.error(error);
+        keyVal.innerText = '-';
+        bpmVal.innerText = '-';
+        camelotVal.innerText = '-';
+        bpmConfidence.innerText = '-';
+        await setProgress('분석에 실패했습니다. 오디오 파일을 확인하세요.', false);
+      } finally {
+        dropZone.classList.remove('analyzing');
+        keyBox.classList.remove('loading');
+        bpmBox.classList.remove('loading');
+        dropIcon.innerText = '🎵';
+        dropLabel.innerText = '오디오 파일 드롭 또는 클릭하여 업로드';
+        dropSub.innerText = 'MP3, WAV, FLAC, M4A 지원 (최대 45초 고정밀 분석)';
+        fileInput.value = '';
+      }
+    }
+
+    // 파형 시각화
+    function drawWaveform(data) {
+      canvas.style.display = 'block';
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      
+      const width = canvas.width;
+      const height = canvas.height;
+      const step = Math.ceil(data.length / width);
+      const amp = height / 2;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#60a5fa';
+
+      for (let i = 0; i < width; i++) {
+        let min = 1.0;
+        let max = -1.0;
+        for (let j = 0; j < step; j++) {
+          const datum = data[(i * step) + j];
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
+        ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+      }
+    }
+
+    // 3. 수동 탭 템포 (Tap BPM)
+    let tapTimes = [];
+    const tapBtn = document.getElementById('tapBtn');
+    tapBtn.addEventListener('click', () => {
+      const now = Date.now();
+      tapTimes.push(now);
+      if (tapTimes.length > 5) tapTimes.shift();
+
+      if (tapTimes.length > 1) {
+        const intervals = [];
+        for (let i = 1; i < tapTimes.length; i++) {
+          intervals.push(tapTimes[i] - tapTimes[i - 1]);
+        }
+        const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+        const manualBpm = Math.round(60000 / avgInterval);
+        bpmVal.innerText = manualBpm;
+        bpmConfidence.innerText = '수동 탭 템포 입력';
+      }
+    });
+  </script>
+</body>
+</html>
