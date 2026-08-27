@@ -6,7 +6,7 @@
   <title>Key & BPM Finder - 음원 키 및 템포 분석기</title>
   <meta name="description" content="브라우저에서 서버 업로드 없이 오디오의 BPM과 Key, 전조를 초고속으로 분석합니다." />
   
-  <!-- Essentia.js WASM & Core -->
+  <!-- Essentia.js WASM (BPM 검출용) -->
   <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js"></script>
 
@@ -259,9 +259,9 @@
       'Db minor': '12A', 'C# minor': '12A', 'E major': '12B'
     };
 
-    // Krumhansl-Schmuckler 화성 프로파일
-    const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
-    const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+    // 화성학 프로파일 (Temperley / Krumhansl 수정 템플릿 - 루트음 변별력 강화)
+    const MAJOR_PROFILE = [6.35, 1.8, 3.5, 1.8, 4.3, 3.9, 1.8, 5.2, 1.8, 3.8, 1.8, 2.5];
+    const MINOR_PROFILE = [6.35, 1.8, 3.5, 5.3, 1.8, 3.5, 1.8, 4.8, 3.9, 1.8, 3.3, 2.5];
     const NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
     function setProgress(text, isLoading = true) {
@@ -294,86 +294,94 @@
       if (e.target.files.length) processAudio(e.target.files[0]);
     });
 
-    // 상관 계수(Correlation) 계산
-    function calculateCorrelation(x, y) {
-      const n = x.length;
-      let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
-      for (let i = 0; i < n; i++) {
-        sumX += x[i];
-        sumY += y[i];
-        sumXY += x[i] * y[i];
-        sumX2 += x[i] * x[i];
-        sumY2 += y[i] * y[i];
-      }
-      const num = (n * sumXY) - (sumX * sumY);
-      const den = Math.sqrt(((n * sumX2) - (sumX * sumX)) * ((n * sumY2) - (sumY * sumY)));
-      return den === 0 ? 0 : num / den;
-    }
-
-    // 5도권 오탐 방지 HPCP 크로마 기반 커스텀 Key 검출기
-    function extractAccurateKey(audioData, sampleRate) {
-      const frameSize = 4096;
+    // 12음 크로마 FFT 분석기 (피어슨 상관계수 기반)
+    function analyzeChromaKey(channelData, sampleRate) {
+      const fftSize = 4096;
       const hopSize = 2048;
-      const totalFrames = Math.floor((audioData.length - frameSize) / hopSize);
-      if (totalFrames <= 0) return { key: 'C', scale: 'major', confidence: 0.5 };
+      const numFrames = Math.floor((channelData.length - fftSize) / hopSize);
+      const chroma = new Float32Array(12).fill(0);
+      const bassChroma = new Float32Array(12).fill(0);
 
-      const accumulatedChroma = new Float32Array(12).fill(0);
-
-      // 프레임별 스펙트럼 및 12음 크로마 분석
-      for (let i = 0; i < totalFrames; i++) {
-        const frame = audioData.subarray(i * hopSize, i * hopSize + frameSize);
-        const vecFrame = essentia.arrayToVector(frame);
-        
-        const win = essentia.Windowing(vecFrame, 'hann', 0, frameSize, true);
-        const spec = essentia.Spectrum(win.frame, frameSize);
-        const peaks = essentia.SpectralPeaks(spec.spectrum, 0.0001, sampleRate, 60, 40, 5000, 'frequency');
-        const hpcp = essentia.HPCP(peaks.frequencies, peaks.magnitudes, 12, 5000, 40, true, 440, sampleRate);
-
-        const hpcpArr = essentia.vectorToArray(hpcp.hpcp);
-        for (let j = 0; j < 12; j++) {
-          accumulatedChroma[j] += hpcpArr[j];
-        }
-
-        // 메모리 해제
-        vecFrame.delete();
-        win.frame.delete();
-        spec.spectrum.delete();
-        peaks.frequencies.delete();
-        peaks.magnitudes.delete();
-        hpcp.hpcp.delete();
+      // Hann Window 생성
+      const window = new Float32Array(fftSize);
+      for (let i = 0; i < fftSize; i++) {
+        window[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
       }
 
-      // 24개 키 상관계수 비교
+      // 프레임별 Discrete Cosine/FFT 간이 에너지 집계
+      for (let f = 0; f < numFrames; f += 2) {
+        const offset = f * hopSize;
+        
+        // 55Hz ~ 1800Hz(A1 ~ A6) 대역의 12반음별 피크 적분
+        for (let midi = 33; midi <= 81; midi++) {
+          const freq = 440 * Math.pow(2, (midi - 69) / 12);
+          const bin = Math.round((freq * fftSize) / sampleRate);
+          const pitchClass = midi % 12;
+
+          let real = 0, imag = 0;
+          for (let i = 0; i < fftSize; i += 4) { // 고속 4-step 스키핑
+            const val = channelData[offset + i] * window[i];
+            const angle = (2 * Math.PI * bin * i) / fftSize;
+            real += val * Math.cos(angle);
+            imag -= val * Math.sin(angle);
+          }
+          const mag = Math.sqrt(real * real + imag * imag);
+          
+          chroma[pitchClass] += mag;
+          // 베이스 음역(C2~C4: MIDI 36~60)에 추가 가중치 부여
+          if (midi <= 60) {
+            bassChroma[pitchClass] += mag * 1.8;
+          }
+        }
+      }
+
+      // 크로마 정규화 및 베이스 가중치 블렌딩
+      const combined = new Float32Array(12);
+      let maxVal = 0;
+      for (let i = 0; i < 12; i++) {
+        combined[i] = chroma[i] + bassChroma[i];
+        if (combined[i] > maxVal) maxVal = combined[i];
+      }
+      if (maxVal > 0) {
+        for (let i = 0; i < 12; i++) combined[i] /= maxVal;
+      }
+
+      // 24개 키 템플릿 매칭
       let bestScore = -Infinity;
       let detectedKey = 'C';
       let detectedScale = 'major';
 
       for (let shift = 0; shift < 12; shift++) {
-        // Shift Chroma Vector
-        const rotatedChroma = [];
+        let dotMaj = 0, dotMin = 0;
+        let normProfMaj = 0, normProfMin = 0, normComb = 0;
+
         for (let i = 0; i < 12; i++) {
-          rotatedChroma.push(accumulatedChroma[(i + shift) % 12]);
+          const val = combined[(i + shift) % 12];
+          dotMaj += val * MAJOR_PROFILE[i];
+          dotMin += val * MINOR_PROFILE[i];
+          normProfMaj += MAJOR_PROFILE[i] ** 2;
+          normProfMin += MINOR_PROFILE[i] ** 2;
+          normComb += val ** 2;
         }
 
-        const scoreMajor = calculateCorrelation(rotatedChroma, MAJOR_PROFILE);
-        const scoreMinor = calculateCorrelation(rotatedChroma, MINOR_PROFILE);
+        const scoreMaj = dotMaj / (Math.sqrt(normComb) * Math.sqrt(normProfMaj));
+        const scoreMin = dotMin / (Math.sqrt(normComb) * Math.sqrt(normProfMin));
 
-        if (scoreMajor > bestScore) {
-          bestScore = scoreMajor;
+        if (scoreMaj > bestScore) {
+          bestScore = scoreMaj;
           detectedKey = NOTE_NAMES[shift];
           detectedScale = 'major';
         }
-        if (scoreMinor > bestScore) {
-          bestScore = scoreMinor;
+        if (scoreMin > bestScore) {
+          bestScore = scoreMin;
           detectedKey = NOTE_NAMES[shift];
           detectedScale = 'minor';
         }
       }
 
-      return { key: detectedKey, scale: detectedScale, score: bestScore };
+      return { key: detectedKey, scale: detectedScale };
     }
 
-    // 초고속 & 고정밀 분석 파이프라인
     async function processAudio(file) {
       if (!essentia) {
         alert('분석 엔진이 아직 로딩 중입니다.');
@@ -404,7 +412,7 @@
         const TARGET_SAMPLE_RATE = 44100;
         const totalDuration = originalBuffer.duration;
 
-        // 최적화: 핵심 화성이 집중된 20초 추출 (초반 10초~30초)
+        // 대표 구간 슬라이스 (초반 10초~30초)
         const SLICE_LEN = 20;
         const part1Start = totalDuration > 30 ? 10 : 0;
         const part1Duration = Math.min(totalDuration - part1Start, SLICE_LEN);
@@ -436,21 +444,22 @@
         const dataPart1 = fullData.subarray(0, p1Samples);
         drawWaveform(dataPart1);
 
-        // 1. 전반부 BPM & 정밀 Key 분석
-        const vec1 = essentia.arrayToVector(dataPart1);
-        const bpmResult = essentia.PercivalBpmEstimator(vec1, TARGET_SAMPLE_RATE);
-        vec1.delete();
+        // 1. BPM 분석 (Essentia WASM)
+        const vecBpm = essentia.arrayToVector(dataPart1);
+        const bpmResult = essentia.PercivalBpmEstimator(vecBpm, TARGET_SAMPLE_RATE);
+        vecBpm.delete();
 
-        const keyResult1 = extractAccurateKey(dataPart1, TARGET_SAMPLE_RATE);
+        // 2. 고정밀 Key 분석 (베이스 가중치 크로마 엔진)
+        const keyResult1 = analyzeChromaKey(dataPart1, TARGET_SAMPLE_RATE);
         const key1Str = `${keyResult1.key} ${keyResult1.scale}`;
 
         let finalKeyDisplay = key1Str;
         let finalCamelotDisplay = `Camelot ${camelotMap[key1Str] || '-'}`;
 
-        // 2. 후반 절정부 전조 분석
+        // 3. 후반 절정부 전조 분석
         if (hasModulationCheck) {
           const dataPart2 = fullData.subarray(p1Samples);
-          const keyResult2 = extractAccurateKey(dataPart2, TARGET_SAMPLE_RATE);
+          const keyResult2 = analyzeChromaKey(dataPart2, TARGET_SAMPLE_RATE);
           const key2Str = `${keyResult2.key} ${keyResult2.scale}`;
 
           if (key1Str !== key2Str) {
