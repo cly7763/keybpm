@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Key & BPM Finder - 음원 키 및 템포 분석기</title>
-  <meta name="description" content="브라우저에서 서버 업로드 없이 오디오의 BPM과 Key, 전조를 초고속으로 분석합니다." />
+  <title>Key & BPM Finder - 고정밀 음원 분석기</title>
+  <meta name="description" content="브라우저에서 서버 업로드 없이 오디오의 BPM과 Key를 고정밀로 분석합니다." />
   
   <!-- Essentia.js WASM (BPM 검출용) -->
   <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js"></script>
@@ -36,11 +36,11 @@
 
     .container {
       width: 100%;
-      max-width: 580px;
+      max-width: 540px;
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 20px;
-      padding: 2rem;
+      padding: 2.2rem;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     }
 
@@ -103,20 +103,8 @@
       display: none;
     }
     .spinner.active { display: inline-block; }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
+    @keyframes spin { to { transform: rotate(360deg); } }
     .status { font-size: 0.88rem; color: var(--text-muted); }
-
-    canvas {
-      width: 100%;
-      height: 48px;
-      background: #111318;
-      border-radius: 8px;
-      margin-top: 1.2rem;
-      display: none;
-    }
 
     .results {
       display: grid;
@@ -130,12 +118,10 @@
       border-radius: 12px;
       padding: 1.2rem 1rem;
       text-align: center;
-      transition: border-color 0.3s;
     }
-    .res-box.loading { border-color: rgba(139, 92, 246, 0.5); }
     .res-title { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
     .res-val { 
-      font-size: 1.9rem; 
+      font-size: 2rem; 
       font-weight: 700; 
       color: #60a5fa; 
       margin-top: 0.3rem; 
@@ -143,9 +129,20 @@
       display: flex; 
       align-items: center; 
       justify-content: center;
-      word-break: keep-all;
     }
     .res-sub { font-size: 0.8rem; color: #a78bfa; margin-top: 0.2rem; min-height: 1rem; }
+
+    .notice-box {
+      margin-top: 1.2rem;
+      background: rgba(234, 179, 8, 0.08);
+      border: 1px solid rgba(234, 179, 8, 0.25);
+      border-radius: 10px;
+      padding: 0.75rem 0.9rem;
+      font-size: 0.8rem;
+      color: #facc15;
+      line-height: 1.4;
+      display: none;
+    }
 
     .skeleton-text {
       display: inline-block;
@@ -196,7 +193,7 @@
     <div class="drop-zone" id="dropZone">
       <span class="drop-icon" id="dropIcon">🎵</span>
       <div class="drop-label" id="dropLabel">오디오 파일 드롭 또는 클릭하여 업로드</div>
-      <div class="drop-sub" id="dropSub">MP3, WAV, FLAC, M4A 지원 (고정밀 화성/전조 분석)</div>
+      <div class="drop-sub" id="dropSub">MP3, WAV, FLAC, M4A 지원</div>
       <input type="file" id="fileInput" accept="audio/*" style="display: none;" />
     </div>
 
@@ -205,11 +202,9 @@
       <div class="status" id="statusText">분석 엔진 로딩 중...</div>
     </div>
 
-    <canvas id="waveformCanvas"></canvas>
-
     <div class="results">
       <div class="res-box" id="keyBox">
-        <div class="res-title">KEY (스케일)</div>
+        <div class="res-title">MAIN KEY (본조성)</div>
         <div class="res-val" id="keyVal">-</div>
         <div class="res-sub" id="camelotVal">-</div>
       </div>
@@ -218,6 +213,10 @@
         <div class="res-val" id="bpmVal">-</div>
         <div class="res-sub" id="bpmConfidence">-</div>
       </div>
+    </div>
+
+    <div class="notice-box" id="noticeBox">
+      💡 <strong>안내:</strong> 1절 벌스 구간(15~40초) 기준 화성 분석 결과입니다. 후반부 전조 곡의 경우 첫 키가 표시됩니다.
     </div>
 
     <div class="footer-tools">
@@ -239,10 +238,7 @@
     const dropLabel = document.getElementById('dropLabel');
     const dropSub = document.getElementById('dropSub');
     const fileInput = document.getElementById('fileInput');
-    const canvas = document.getElementById('waveformCanvas');
-    const keyBox = document.getElementById('keyBox');
-    const bpmBox = document.getElementById('bpmBox');
-    const ctx = canvas.getContext('2d');
+    const noticeBox = document.getElementById('noticeBox');
 
     const camelotMap = {
       'Ab minor': '1A', 'G# minor': '1A', 'B major': '1B',
@@ -259,18 +255,16 @@
       'Db minor': '12A', 'C# minor': '12A', 'E major': '12B'
     };
 
-    // 화성학 프로파일 (Temperley / Krumhansl 수정 템플릿 - 루트음 변별력 강화)
-    const MAJOR_PROFILE = [6.35, 1.8, 3.5, 1.8, 4.3, 3.9, 1.8, 5.2, 1.8, 3.8, 1.8, 2.5];
-    const MINOR_PROFILE = [6.35, 1.8, 3.5, 5.3, 1.8, 3.5, 1.8, 4.8, 3.9, 1.8, 3.3, 2.5];
+    // EDMA 고변별력 프로파일 (5도권 오인 및 Major/Minor 혼선 방지)
+    // 1도(루트), 3도, 5도, 7도에 명확한 차등 부여
+    const EDMA_MAJOR = [1.0, 0.05, 0.35, 0.05, 0.65, 0.45, 0.05, 0.80, 0.05, 0.40, 0.05, 0.35];
+    const EDMA_MINOR = [1.0, 0.05, 0.35, 0.70, 0.05, 0.45, 0.05, 0.80, 0.45, 0.05, 0.40, 0.05];
     const NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
     function setProgress(text, isLoading = true) {
       statusText.innerText = text;
-      if (isLoading) {
-        loadingSpinner.classList.add('active');
-      } else {
-        loadingSpinner.classList.remove('active');
-      }
+      if (isLoading) loadingSpinner.classList.add('active');
+      else loadingSpinner.classList.remove('active');
       return new Promise(resolve => setTimeout(resolve, 20));
     }
 
@@ -294,48 +288,50 @@
       if (e.target.files.length) processAudio(e.target.files[0]);
     });
 
-    // 12음 크로마 FFT 분석기 (피어슨 상관계수 기반)
-    function analyzeChromaKey(channelData, sampleRate) {
-      const fftSize = 4096;
-      const hopSize = 2048;
-      const numFrames = Math.floor((channelData.length - fftSize) / hopSize);
+    // 배음 억제(Harmonic Suppression)가 적용된 정밀 크로마 추출
+    function extractHighPrecisionKey(channelData, sampleRate) {
+      const fftSize = 8192; // 주파수 분해능 2배 향상
+      const hop = 4096;
+      const frames = Math.floor((channelData.length - fftSize) / hop);
       const chroma = new Float32Array(12).fill(0);
       const bassChroma = new Float32Array(12).fill(0);
 
-      // Hann Window 생성
       const window = new Float32Array(fftSize);
       for (let i = 0; i < fftSize; i++) {
         window[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
       }
 
-      // 프레임별 Discrete Cosine/FFT 간이 에너지 집계
-      for (let f = 0; f < numFrames; f += 2) {
-        const offset = f * hopSize;
-        
-        // 55Hz ~ 1800Hz(A1 ~ A6) 대역의 12반음별 피크 적분
-        for (let midi = 33; midi <= 81; midi++) {
+      for (let f = 0; f < frames; f++) {
+        const offset = f * hop;
+
+        // C2 (65.4Hz) ~ C6 (1046.5Hz) 사이의 피크만 정밀 적분
+        for (let midi = 36; midi <= 84; midi++) {
           const freq = 440 * Math.pow(2, (midi - 69) / 12);
           const bin = Math.round((freq * fftSize) / sampleRate);
           const pitchClass = midi % 12;
 
           let real = 0, imag = 0;
-          for (let i = 0; i < fftSize; i += 4) { // 고속 4-step 스키핑
+          for (let i = 0; i < fftSize; i += 4) {
             const val = channelData[offset + i] * window[i];
             const angle = (2 * Math.PI * bin * i) / fftSize;
             real += val * Math.cos(angle);
             imag -= val * Math.sin(angle);
           }
-          const mag = Math.sqrt(real * real + imag * imag);
-          
+          let mag = Math.sqrt(real * real + imag * imag);
+
+          // 5도 위 배음 간섭 억제 (3번째 배음 에너지 상쇄)
+          const fifthClass = (pitchClass + 7) % 12;
           chroma[pitchClass] += mag;
-          // 베이스 음역(C2~C4: MIDI 36~60)에 추가 가중치 부여
-          if (midi <= 60) {
-            bassChroma[pitchClass] += mag * 1.8;
+          chroma[fifthClass] = Math.max(0, chroma[fifthClass] - mag * 0.15);
+
+          // 베이스 음역(C2~B3: 36~59)에 루트 가중치 부여
+          if (midi <= 59) {
+            bassChroma[pitchClass] += mag * 3.0;
           }
         }
       }
 
-      // 크로마 정규화 및 베이스 가중치 블렌딩
+      // 정규화 및 합성
       const combined = new Float32Array(12);
       let maxVal = 0;
       for (let i = 0; i < 12; i++) {
@@ -346,26 +342,24 @@
         for (let i = 0; i < 12; i++) combined[i] /= maxVal;
       }
 
-      // 24개 키 템플릿 매칭
       let bestScore = -Infinity;
-      let detectedKey = 'C';
-      let detectedScale = 'major';
+      let detectedKey = 'C', detectedScale = 'major';
 
       for (let shift = 0; shift < 12; shift++) {
         let dotMaj = 0, dotMin = 0;
-        let normProfMaj = 0, normProfMin = 0, normComb = 0;
+        let normMaj = 0, normMin = 0, normComb = 0;
 
         for (let i = 0; i < 12; i++) {
           const val = combined[(i + shift) % 12];
-          dotMaj += val * MAJOR_PROFILE[i];
-          dotMin += val * MINOR_PROFILE[i];
-          normProfMaj += MAJOR_PROFILE[i] ** 2;
-          normProfMin += MINOR_PROFILE[i] ** 2;
+          dotMaj += val * EDMA_MAJOR[i];
+          dotMin += val * EDMA_MINOR[i];
+          normMaj += EDMA_MAJOR[i] ** 2;
+          normMin += EDMA_MINOR[i] ** 2;
           normComb += val ** 2;
         }
 
-        const scoreMaj = dotMaj / (Math.sqrt(normComb) * Math.sqrt(normProfMaj));
-        const scoreMin = dotMin / (Math.sqrt(normComb) * Math.sqrt(normProfMin));
+        const scoreMaj = dotMaj / (Math.sqrt(normComb) * Math.sqrt(normMaj));
+        const scoreMin = dotMin / (Math.sqrt(normComb) * Math.sqrt(normMin));
 
         if (scoreMaj > bestScore) {
           bestScore = scoreMaj;
@@ -389,15 +383,13 @@
       }
 
       dropZone.classList.add('analyzing');
-      keyBox.classList.add('loading');
-      bpmBox.classList.add('loading');
       dropIcon.innerText = '⚡';
-      dropLabel.innerText = '초고속 정밀 분석 진행 중...';
+      dropLabel.innerText = '음원 분석 중...';
       dropSub.innerText = `${file.name}`;
+      noticeBox.style.display = 'none';
 
       keyVal.innerHTML = '<span class="skeleton-text"></span>';
       bpmVal.innerHTML = '<span class="skeleton-text"></span>';
-      keyVal.style.fontSize = '1.9rem';
       camelotVal.innerText = 'Key 계산 중...';
       bpmConfidence.innerText = 'Tempo 계산 중...';
 
@@ -412,68 +404,36 @@
         const TARGET_SAMPLE_RATE = 44100;
         const totalDuration = originalBuffer.duration;
 
-        // 대표 구간 슬라이스 (초반 10초~30초)
-        const SLICE_LEN = 20;
-        const part1Start = totalDuration > 30 ? 10 : 0;
-        const part1Duration = Math.min(totalDuration - part1Start, SLICE_LEN);
+        // [핵심] 인트로 모달 인터체인지를 건너뛰고 가장 안정적인 1절 벌스 구간(15초~40초, 25초간) 추출
+        const startSec = totalDuration > 35 ? 15 : (totalDuration > 15 ? 5 : 0);
+        const sliceDuration = Math.min(totalDuration - startSec, 25);
 
-        const hasModulationCheck = totalDuration > 70;
-        const part2Start = hasModulationCheck ? totalDuration * 0.68 : 0;
-        const part2Duration = Math.min(totalDuration - part2Start, SLICE_LEN);
+        const offlineCtx = new OfflineAudioContext(1, Math.floor(TARGET_SAMPLE_RATE * sliceDuration), TARGET_SAMPLE_RATE);
+        const src = offlineCtx.createBufferSource();
+        src.buffer = originalBuffer;
+        src.connect(offlineCtx.destination);
+        src.start(0, startSec, sliceDuration);
 
-        const totalRenderSamples = Math.floor(TARGET_SAMPLE_RATE * (part1Duration + (hasModulationCheck ? part2Duration : 0)));
-        const offlineCtx = new OfflineAudioContext(1, totalRenderSamples, TARGET_SAMPLE_RATE);
-
-        const src1 = offlineCtx.createBufferSource();
-        src1.buffer = originalBuffer;
-        src1.connect(offlineCtx.destination);
-        src1.start(0, part1Start, part1Duration);
-
-        if (hasModulationCheck) {
-          const src2 = offlineCtx.createBufferSource();
-          src2.buffer = originalBuffer;
-          src2.connect(offlineCtx.destination);
-          src2.start(part1Duration, part2Start, part2Duration);
-        }
-
-        await setProgress('파형 렌더링 및 화성 분석 중...', true);
+        await setProgress('배음 억제 및 화성 정밀 분석 중...', true);
         const resampledBuffer = await offlineCtx.startRendering();
-        const fullData = resampledBuffer.getChannelData(0);
+        const channelData = resampledBuffer.getChannelData(0);
 
-        const p1Samples = Math.floor(TARGET_SAMPLE_RATE * part1Duration);
-        const dataPart1 = fullData.subarray(0, p1Samples);
-        drawWaveform(dataPart1);
-
-        // 1. BPM 분석 (Essentia WASM)
-        const vecBpm = essentia.arrayToVector(dataPart1);
+        // 1. BPM 분석 (Essentia)
+        const vecBpm = essentia.arrayToVector(channelData);
         const bpmResult = essentia.PercivalBpmEstimator(vecBpm, TARGET_SAMPLE_RATE);
         vecBpm.delete();
 
-        // 2. 고정밀 Key 분석 (베이스 가중치 크로마 엔진)
-        const keyResult1 = analyzeChromaKey(dataPart1, TARGET_SAMPLE_RATE);
-        const key1Str = `${keyResult1.key} ${keyResult1.scale}`;
-
-        let finalKeyDisplay = key1Str;
-        let finalCamelotDisplay = `Camelot ${camelotMap[key1Str] || '-'}`;
-
-        // 3. 후반 절정부 전조 분석
-        if (hasModulationCheck) {
-          const dataPart2 = fullData.subarray(p1Samples);
-          const keyResult2 = analyzeChromaKey(dataPart2, TARGET_SAMPLE_RATE);
-          const key2Str = `${keyResult2.key} ${keyResult2.scale}`;
-
-          if (key1Str !== key2Str) {
-            finalKeyDisplay = `${key1Str} ➔ ${key2Str}`;
-            keyVal.style.fontSize = '1.25rem';
-            finalCamelotDisplay = `⚡ 전조: ${camelotMap[key1Str] || '-'} ➔ ${camelotMap[key2Str] || '-'}`;
-          }
-        }
+        // 2. 고정밀 Key 분석
+        const keyResult = extractHighPrecisionKey(channelData, TARGET_SAMPLE_RATE);
+        const keyStr = `${keyResult.key} ${keyResult.scale}`;
 
         bpmVal.innerText = Math.round(bpmResult.bpm);
         bpmConfidence.innerText = `BPM 신뢰도: ${(bpmResult.confidence || 0.95).toFixed(2)}`;
-        keyVal.innerText = finalKeyDisplay;
-        camelotVal.innerText = finalCamelotDisplay;
+        
+        keyVal.innerText = keyStr;
+        camelotVal.innerText = `Camelot ${camelotMap[keyStr] || '-'}`;
 
+        noticeBox.style.display = 'block';
         await setProgress(`분석 완료 (${file.name})`, false);
       } catch (error) {
         console.error(error);
@@ -484,40 +444,14 @@
         await setProgress('분석에 실패했습니다. 오디오 파일을 확인하세요.', false);
       } finally {
         dropZone.classList.remove('analyzing');
-        keyBox.classList.remove('loading');
-        bpmBox.classList.remove('loading');
         dropIcon.innerText = '🎵';
         dropLabel.innerText = '오디오 파일 드롭 또는 클릭하여 업로드';
-        dropSub.innerText = 'MP3, WAV, FLAC, M4A 지원 (고정밀 화성/전조 분석)';
+        dropSub.innerText = 'MP3, WAV, FLAC, M4A 지원';
         fileInput.value = '';
       }
     }
 
-    function drawWaveform(data) {
-      canvas.style.display = 'block';
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-      
-      const width = canvas.width;
-      const height = canvas.height;
-      const step = Math.ceil(data.length / width);
-      const amp = height / 2;
-
-      ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = '#60a5fa';
-
-      for (let i = 0; i < width; i++) {
-        let min = 1.0;
-        let max = -1.0;
-        for (let j = 0; j < step; j++) {
-          const datum = data[(i * step) + j];
-          if (datum < min) min = datum;
-          if (datum > max) max = datum;
-        }
-        ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
-      }
-    }
-
+    // 수동 탭 템포 (Tap BPM)
     let tapTimes = [];
     const tapBtn = document.getElementById('tapBtn');
     tapBtn.addEventListener('click', () => {
