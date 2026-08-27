@@ -270,6 +270,57 @@
     }
     .link-home:hover { color: var(--accent-blue); }
 
+    /* 팝업 차단 잠금 모달 */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5, 8, 15, 0.85);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 1.25rem;
+    }
+    .modal-box {
+      background: var(--card-bg);
+      border: 1.5px solid #ef4444;
+      border-radius: 18px;
+      max-width: 380px;
+      width: 100%;
+      padding: 1.75rem 1.25rem;
+      text-align: center;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.7);
+    }
+    .modal-box h3 {
+      color: #ef4444;
+      font-size: 1.15rem;
+      margin-bottom: 0.75rem;
+      font-weight: 700;
+    }
+    .modal-box p {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin-bottom: 1.25rem;
+      word-break: keep-all;
+    }
+    .modal-btn {
+      width: 100%;
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      padding: 0.75rem;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    .modal-btn:hover {
+      background: #dc2626;
+    }
+
     @media (max-width: 360px) {
       .container { padding: 1.2rem 0.9rem; }
       .footer-tools { flex-direction: column; gap: 0.5rem; }
@@ -278,6 +329,18 @@
   </style>
 </head>
 <body>
+
+  <!-- 팝업 차단 경고 모달 -->
+  <div class="modal-overlay" id="popupModal">
+    <div class="modal-box">
+      <h3 data-i18n="modal-title">🚫 팝업 차단을 해제해주세요</h3>
+      <p data-i18n="modal-desc">
+        무료 음원 분석 서비스를 이용하려면 브라우저의 <strong>'팝업 및 리디렉션'</strong> 허용이 필요합니다.<br><br>
+        주소창의 팝업 차단 아이콘(🚫)을 눌러 <strong>[항상 허용]</strong>으로 변경한 후 다시 터치해주세요.
+      </p>
+      <button class="modal-btn" onclick="closePopupModal()" data-i18n="modal-btn">확인했습니다</button>
+    </div>
+  </div>
 
   <div class="container">
     <div class="top-header-row">
@@ -329,19 +392,7 @@
 
   <script>
     const AD_DIRECT_LINK = 'https://nwithplentyoff.org?w2Zty=1586117';
-
-    // 팝업 트리거 (1회 단일 탭 열기)
-    function triggerAdLink() {
-      try {
-        const adWin = window.open(AD_DIRECT_LINK, '_blank');
-        if (adWin) {
-          adWin.blur();
-          window.focus();
-        }
-      } catch (e) {
-        console.warn('SmartLink trigger bypassed:', e);
-      }
-    }
+    let isAdUnlocked = false;
 
     let currentLang = 'ko';
 
@@ -362,7 +413,10 @@
         "status-analyzing": "배음 억제 및 화성 정밀 분석 중...",
         "status-done": "분석 완료",
         "status-error": "분석에 실패했습니다. 오디오 파일을 확인하세요.",
-        "tap-input": "수동 탭 템포 입력"
+        "tap-input": "수동 탭 템포 입력",
+        "modal-title": "🚫 팝업 차단을 해제해주세요",
+        "modal-desc": "무료 음원 분석 서비스를 이용하려면 브라우저의 <strong>'팝업 및 리디렉션'</strong> 허용이 필요합니다.<br><br>주소창의 팝업 차단 아이콘(🚫)을 눌러 <strong>[항상 허용]</strong>으로 변경한 후 다시 터치해주세요.",
+        "modal-btn": "확인했습니다"
       },
       en: {
         "header-sub": "100% local, high-speed audio analyzer in your browser",
@@ -380,7 +434,10 @@
         "status-analyzing": "Harmonic & tempo analysis in progress...",
         "status-done": "Analysis completed",
         "status-error": "Analysis failed. Please check your file.",
-        "tap-input": "Manual Tap Input"
+        "tap-input": "Manual Tap Input",
+        "modal-title": "🚫 Please Allow Pop-ups",
+        "modal-desc": "To use the free audio detector, please allow <strong>'Pop-ups and redirects'</strong> in your browser.<br><br>Click the pop-up blocked icon (🚫) in the address bar, set to <strong>[Always allow]</strong>, and try again.",
+        "modal-btn": "Understood"
       }
     };
 
@@ -391,7 +448,7 @@
       document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (translations[lang] && translations[lang][key]) {
-          if (key === 'notice-text') {
+          if (key === 'notice-text' || key === 'modal-desc') {
             el.innerHTML = translations[lang][key];
           } else {
             el.textContent = translations[lang][key];
@@ -406,6 +463,14 @@
       if (essentia && !document.getElementById('dropZone').classList.contains('analyzing')) {
         document.getElementById('statusText').innerText = translations[lang]["engine-ready"];
       }
+    }
+
+    const popupModal = document.getElementById('popupModal');
+    function showPopupModal() {
+      popupModal.style.display = 'flex';
+    }
+    function closePopupModal() {
+      popupModal.style.display = 'none';
     }
 
     let essentia = null;
@@ -455,9 +520,35 @@
       console.error(err);
     });
 
-    // 1. 박스 클릭 시 네이티브 파일 탐색기 즉시 호출 (팝업 간섭 배제)
+    // 팝업 열기 검증 함수: 차단 시 false 반환 및 모달 오픈
+    function verifyPopupAllowed() {
+      if (isAdUnlocked) return true;
+
+      try {
+        const adWin = window.open(AD_DIRECT_LINK, '_blank');
+        if (!adWin || adWin.closed || typeof adWin.closed === 'undefined') {
+          showPopupModal();
+          return false;
+        }
+        
+        // 팝업이 성공적으로 열림 -> 인증 플래그 활성화
+        isAdUnlocked = true;
+        try {
+          adWin.blur();
+          window.focus();
+        } catch(e) {}
+        return true;
+      } catch (e) {
+        showPopupModal();
+        return false;
+      }
+    }
+
+    // 업로드 박스 터치/클릭 이벤트
     dropZone.addEventListener('click', () => {
-      fileInput.click();
+      if (verifyPopupAllowed()) {
+        fileInput.click();
+      }
     });
 
     dropZone.addEventListener('dragover', (e) => { 
@@ -469,20 +560,20 @@
       dropZone.classList.remove('dragover'); 
     });
     
-    // 2. 드래그 앤 드롭 시 스마트링크 1회 실행 후 분석
+    // 드래그 앤 드롭 이벤트
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropZone.classList.remove('dragover');
       if (e.dataTransfer.files.length) {
-        triggerAdLink();
-        processAudio(e.dataTransfer.files[0]);
+        if (verifyPopupAllowed()) {
+          processAudio(e.dataTransfer.files[0]);
+        }
       }
     });
 
-    // 3. 파일 선택기에서 파일이 확정되는 순간 스마트링크 1회 실행 후 분석 진행
+    // 파일 선택 완료 시 분석 진행
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length) {
-        triggerAdLink();
         processAudio(e.target.files[0]);
       }
     });
