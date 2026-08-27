@@ -3,22 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Key & BPM Finder - 고정밀 음원 분석기</title>
-  <meta name="description" content="브라우저에서 서버 업로드 없이 오디오의 BPM과 Key를 고정밀로 분석합니다." />
-  
-  <!-- Essentia.js WASM (BPM 검출용) -->
+  <title>Key & BPM Finder - Free Online Audio Key & BPM Detector</title>
+  <meta name="description" content="Detect BPM, Key, and Camelot code of any audio file (MP3, WAV) locally in your browser. 100% free and fast with no file upload to servers." />
+  <link rel="canonical" href="https://keyandbpm.createdmk.com/" />
+
+  <!-- Essentia.js WASM & Core -->
   <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js"></script>
 
   <style>
     :root {
-      --bg-color: #0d0e12;
-      --card-bg: #16181f;
-      --border-color: #272a37;
-      --accent-blue: #3b82f6;
-      --accent-purple: #8b5cf6;
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --border-color: #334155;
+      --accent-blue: #38bdf8;
+      --accent-purple: #818cf8;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,21 +35,53 @@
       padding: 1.5rem;
     }
 
+    .top-bar {
+      width: 100%;
+      max-width: 560px;
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 0.8rem;
+    }
+
+    .lang-switcher {
+      display: flex;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 16px;
+      transition: all 0.2s ease;
+    }
+    .lang-btn.active {
+      background: #38bdf8;
+      color: #0f172a;
+    }
+
     .container {
       width: 100%;
-      max-width: 540px;
+      max-width: 560px;
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 20px;
       padding: 2.2rem;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
     }
 
     header { text-align: center; margin-bottom: 1.8rem; }
     header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #60a5fa, #c084fc);
+      font-size: 1.85rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, #38bdf8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 0.4rem;
@@ -67,18 +100,18 @@
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--accent-blue);
-      background: rgba(59, 130, 246, 0.05);
+      background: rgba(56, 189, 248, 0.05);
     }
     .drop-zone.analyzing {
       border-color: var(--accent-purple);
-      background: rgba(139, 92, 246, 0.08);
+      background: rgba(129, 140, 248, 0.08);
       pointer-events: none;
       animation: pulse-border 1.2s infinite ease-in-out;
     }
 
     @keyframes pulse-border {
-      0%, 100% { border-color: rgba(139, 92, 246, 0.4); }
-      50% { border-color: rgba(96, 165, 250, 1); }
+      0%, 100% { border-color: rgba(129, 140, 248, 0.4); }
+      50% { border-color: rgba(56, 189, 248, 1); }
     }
 
     .drop-icon { font-size: 2.2rem; margin-bottom: 0.6rem; display: block; }
@@ -96,8 +129,8 @@
     .spinner {
       width: 16px;
       height: 16px;
-      border: 2px solid rgba(96, 165, 250, 0.2);
-      border-top-color: #60a5fa;
+      border: 2px solid rgba(56, 189, 248, 0.2);
+      border-top-color: #38bdf8;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       display: none;
@@ -113,7 +146,7 @@
       margin-top: 1.5rem;
     }
     .res-box {
-      background: #111318;
+      background: #0f172a;
       border: 1px solid var(--border-color);
       border-radius: 12px;
       padding: 1.2rem 1rem;
@@ -123,7 +156,7 @@
     .res-val { 
       font-size: 2rem; 
       font-weight: 700; 
-      color: #60a5fa; 
+      color: #38bdf8; 
       margin-top: 0.3rem; 
       min-height: 2.4rem; 
       display: flex; 
@@ -148,7 +181,7 @@
       display: inline-block;
       width: 70px;
       height: 26px;
-      background: linear-gradient(90deg, #1e212b 25%, #2a2e3d 50%, #1e212b 75%);
+      background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e212b 75%);
       background-size: 200% 100%;
       animation: skeleton-move 1.4s infinite;
       border-radius: 6px;
@@ -168,32 +201,40 @@
       font-size: 0.85rem;
     }
     .tap-btn {
-      background: var(--border-color);
-      border: none;
+      background: #0f172a;
+      border: 1px solid var(--border-color);
       color: var(--text-main);
       padding: 0.5rem 1rem;
       border-radius: 8px;
       cursor: pointer;
       font-size: 0.8rem;
-      transition: background 0.2s;
+      font-weight: 600;
+      transition: all 0.2s;
     }
-    .tap-btn:hover { background: #374151; }
+    .tap-btn:hover { background: #334155; border-color: #38bdf8; }
     .link-home { color: var(--text-muted); text-decoration: none; font-size: 0.8rem; }
-    .link-home:hover { color: var(--text-main); }
+    .link-home:hover { color: #38bdf8; }
   </style>
 </head>
 <body>
 
+  <div class="top-bar">
+    <div class="lang-switcher">
+      <button class="lang-btn active" onclick="setLanguage('ko')" id="btn-ko">KOR</button>
+      <button class="lang-btn" onclick="setLanguage('en')" id="btn-en">ENG</button>
+    </div>
+  </div>
+
   <div class="container">
     <header>
       <h1>Key & BPM Finder</h1>
-      <p>서버 전송 없이 브라우저에서 100% 로컬로 고속 분석</p>
+      <p data-i18n="header-sub">서버 전송 없이 브라우저에서 100% 로컬로 고속 분석</p>
     </header>
 
     <div class="drop-zone" id="dropZone">
       <span class="drop-icon" id="dropIcon">🎵</span>
-      <div class="drop-label" id="dropLabel">오디오 파일 드롭 또는 클릭하여 업로드</div>
-      <div class="drop-sub" id="dropSub">MP3, WAV, FLAC, M4A 지원</div>
+      <div class="drop-label" id="dropLabel" data-i18n="drop-label">오디오 파일 드롭 또는 클릭하여 업로드</div>
+      <div class="drop-sub" id="dropSub" data-i18n="drop-sub">MP3, WAV, FLAC, M4A 지원</div>
       <input type="file" id="fileInput" accept="audio/*" style="display: none;" />
     </div>
 
@@ -204,28 +245,93 @@
 
     <div class="results">
       <div class="res-box" id="keyBox">
-        <div class="res-title">MAIN KEY (본조성)</div>
+        <div class="res-title" data-i18n="res-key-title">MAIN KEY (본조성)</div>
         <div class="res-val" id="keyVal">-</div>
         <div class="res-sub" id="camelotVal">-</div>
       </div>
       <div class="res-box" id="bpmBox">
-        <div class="res-title">TEMPO (BPM)</div>
+        <div class="res-title" data-i18n="res-bpm-title">TEMPO (BPM)</div>
         <div class="res-val" id="bpmVal">-</div>
         <div class="res-sub" id="bpmConfidence">-</div>
       </div>
     </div>
 
-    <div class="notice-box" id="noticeBox">
+    <div class="notice-box" id="noticeBox" data-i18n="notice-text">
       💡 <strong>안내:</strong> 1절 벌스 구간(15~40초) 기준 화성 분석 결과입니다. 후반부 전조 곡의 경우 첫 키가 표시됩니다.
     </div>
 
     <div class="footer-tools">
-      <button class="tap-btn" id="tapBtn">수동 탭 템포 (Tap BPM)</button>
-      <a href="https://chordhelper.createdmk.com/" class="link-home">Chord Helper 바로가기 →</a>
+      <button class="tap-btn" id="tapBtn" data-i18n="tap-btn">수동 탭 템포 (Tap BPM)</button>
+      <a href="https://chordhelper.createdmk.com/" class="link-home" data-i18n="link-chordhelper">Chord Helper 바로가기 →</a>
     </div>
   </div>
 
   <script>
+    let currentLang = 'ko';
+
+    const translations = {
+      ko: {
+        "header-sub": "서버 전송 없이 브라우저에서 100% 로컬로 고속 분석",
+        "drop-label": "오디오 파일 드롭 또는 클릭하여 업로드",
+        "drop-sub": "MP3, WAV, FLAC, M4A 지원",
+        "res-key-title": "MAIN KEY (본조성)",
+        "res-bpm-title": "TEMPO (BPM)",
+        "notice-text": "💡 <strong>안내:</strong> 1절 벌스 구간(15~40초) 기준 화성 분석 결과입니다. 후반부 전조 곡의 경우 첫 키가 표시됩니다.",
+        "tap-btn": "수동 탭 템포 (Tap BPM)",
+        "link-chordhelper": "Chord Helper 바로가기 →",
+        "engine-loading": "분석 엔진 로딩 중...",
+        "engine-ready": "준비 완료: 음원을 올려주세요.",
+        "engine-failed": "WASM 엔진 초기화 실패",
+        "status-reading": "오디오 읽는 중...",
+        "status-analyzing": "배음 억제 및 화성 정밀 분석 중...",
+        "status-done": "분석 완료",
+        "status-error": "분석에 실패했습니다. 오디오 파일을 확인하세요.",
+        "tap-input": "수동 탭 템포 입력"
+      },
+      en: {
+        "header-sub": "100% local, high-speed audio analyzer in your browser",
+        "drop-label": "Drop audio file here or click to upload",
+        "drop-sub": "Supports MP3, WAV, FLAC, M4A",
+        "res-key-title": "MAIN KEY",
+        "res-bpm-title": "TEMPO (BPM)",
+        "notice-text": "💡 <strong>Notice:</strong> Analyzed based on the main verse (15-40s). For modulated tracks, initial key is displayed.",
+        "tap-btn": "Manual Tap BPM",
+        "link-chordhelper": "Go to Chord Helper →",
+        "engine-loading": "Loading analysis engine...",
+        "engine-ready": "Ready: Drop an audio file to analyze.",
+        "engine-failed": "Failed to initialize WASM engine",
+        "status-reading": "Reading audio data...",
+        "status-analyzing": "Harmonic precision & tempo analysis in progress...",
+        "status-done": "Analysis completed",
+        "status-error": "Analysis failed. Please check your audio file.",
+        "tap-input": "Manual Tap Input"
+      }
+    };
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      document.documentElement.lang = lang;
+      
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (translations[lang] && translations[lang][key]) {
+          if (key === 'notice-text') {
+            el.innerHTML = translations[lang][key];
+          } else {
+            el.textContent = translations[lang][key];
+          }
+        }
+      });
+
+      document.getElementById('btn-ko').classList.toggle('active', lang === 'ko');
+      document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+      localStorage.setItem('preferred-lang', lang);
+
+      if (essentia && !document.getElementById('dropZone').classList.contains('analyzing')) {
+        document.getElementById('statusText').innerText = translations[lang]["engine-ready"];
+      }
+    }
+
     let essentia = null;
     const statusText = document.getElementById('statusText');
     const loadingSpinner = document.getElementById('loadingSpinner');
@@ -236,7 +342,6 @@
     const dropZone = document.getElementById('dropZone');
     const dropIcon = document.getElementById('dropIcon');
     const dropLabel = document.getElementById('dropLabel');
-    const dropSub = document.getElementById('dropSub');
     const fileInput = document.getElementById('fileInput');
     const noticeBox = document.getElementById('noticeBox');
 
@@ -255,8 +360,6 @@
       'Db minor': '12A', 'C# minor': '12A', 'E major': '12B'
     };
 
-    // EDMA 고변별력 프로파일 (5도권 오인 및 Major/Minor 혼선 방지)
-    // 1도(루트), 3도, 5도, 7도에 명확한 차등 부여
     const EDMA_MAJOR = [1.0, 0.05, 0.35, 0.05, 0.65, 0.45, 0.05, 0.80, 0.05, 0.40, 0.05, 0.35];
     const EDMA_MINOR = [1.0, 0.05, 0.35, 0.70, 0.05, 0.45, 0.05, 0.80, 0.45, 0.05, 0.40, 0.05];
     const NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -270,9 +373,9 @@
 
     EssentiaWASM().then((wasmModule) => {
       essentia = new Essentia(wasmModule);
-      setProgress('준비 완료: 음원을 올려주세요.', false);
+      setProgress(translations[currentLang]["engine-ready"], false);
     }).catch(err => {
-      setProgress('WASM 엔진 초기화 실패', false);
+      setProgress(translations[currentLang]["engine-failed"], false);
       console.error(err);
     });
 
@@ -288,9 +391,8 @@
       if (e.target.files.length) processAudio(e.target.files[0]);
     });
 
-    // 배음 억제(Harmonic Suppression)가 적용된 정밀 크로마 추출
     function extractHighPrecisionKey(channelData, sampleRate) {
-      const fftSize = 8192; // 주파수 분해능 2배 향상
+      const fftSize = 8192;
       const hop = 4096;
       const frames = Math.floor((channelData.length - fftSize) / hop);
       const chroma = new Float32Array(12).fill(0);
@@ -303,8 +405,6 @@
 
       for (let f = 0; f < frames; f++) {
         const offset = f * hop;
-
-        // C2 (65.4Hz) ~ C6 (1046.5Hz) 사이의 피크만 정밀 적분
         for (let midi = 36; midi <= 84; midi++) {
           const freq = 440 * Math.pow(2, (midi - 69) / 12);
           const bin = Math.round((freq * fftSize) / sampleRate);
@@ -319,19 +419,14 @@
           }
           let mag = Math.sqrt(real * real + imag * imag);
 
-          // 5도 위 배음 간섭 억제 (3번째 배음 에너지 상쇄)
           const fifthClass = (pitchClass + 7) % 12;
           chroma[pitchClass] += mag;
           chroma[fifthClass] = Math.max(0, chroma[fifthClass] - mag * 0.15);
 
-          // 베이스 음역(C2~B3: 36~59)에 루트 가중치 부여
-          if (midi <= 59) {
-            bassChroma[pitchClass] += mag * 3.0;
-          }
+          if (midi <= 59) bassChroma[pitchClass] += mag * 3.0;
         }
       }
 
-      // 정규화 및 합성
       const combined = new Float32Array(12);
       let maxVal = 0;
       for (let i = 0; i < 12; i++) {
@@ -346,9 +441,7 @@
       let detectedKey = 'C', detectedScale = 'major';
 
       for (let shift = 0; shift < 12; shift++) {
-        let dotMaj = 0, dotMin = 0;
-        let normMaj = 0, normMin = 0, normComb = 0;
-
+        let dotMaj = 0, dotMin = 0, normMaj = 0, normMin = 0, normComb = 0;
         for (let i = 0; i < 12; i++) {
           const val = combined[(i + shift) % 12];
           dotMaj += val * EDMA_MAJOR[i];
@@ -357,7 +450,6 @@
           normMin += EDMA_MINOR[i] ** 2;
           normComb += val ** 2;
         }
-
         const scoreMaj = dotMaj / (Math.sqrt(normComb) * Math.sqrt(normMaj));
         const scoreMin = dotMin / (Math.sqrt(normComb) * Math.sqrt(normMin));
 
@@ -377,24 +469,19 @@
     }
 
     async function processAudio(file) {
-      if (!essentia) {
-        alert('분석 엔진이 아직 로딩 중입니다.');
-        return;
-      }
+      if (!essentia) return;
 
       dropZone.classList.add('analyzing');
       dropIcon.innerText = '⚡';
-      dropLabel.innerText = '음원 분석 중...';
-      dropSub.innerText = `${file.name}`;
       noticeBox.style.display = 'none';
 
       keyVal.innerHTML = '<span class="skeleton-text"></span>';
       bpmVal.innerHTML = '<span class="skeleton-text"></span>';
-      camelotVal.innerText = 'Key 계산 중...';
-      bpmConfidence.innerText = 'Tempo 계산 중...';
+      camelotVal.innerText = 'Calculating...';
+      bpmConfidence.innerText = 'Calculating...';
 
       try {
-        await setProgress('오디오 읽는 중...', true);
+        await setProgress(translations[currentLang]["status-reading"], true);
 
         const arrayBuffer = await file.arrayBuffer();
         const tempAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -404,7 +491,6 @@
         const TARGET_SAMPLE_RATE = 44100;
         const totalDuration = originalBuffer.duration;
 
-        // [핵심] 인트로 모달 인터체인지를 건너뛰고 가장 안정적인 1절 벌스 구간(15초~40초, 25초간) 추출
         const startSec = totalDuration > 35 ? 15 : (totalDuration > 15 ? 5 : 0);
         const sliceDuration = Math.min(totalDuration - startSec, 25);
 
@@ -414,44 +500,39 @@
         src.connect(offlineCtx.destination);
         src.start(0, startSec, sliceDuration);
 
-        await setProgress('배음 억제 및 화성 정밀 분석 중...', true);
+        await setProgress(translations[currentLang]["status-analyzing"], true);
         const resampledBuffer = await offlineCtx.startRendering();
         const channelData = resampledBuffer.getChannelData(0);
 
-        // 1. BPM 분석 (Essentia)
         const vecBpm = essentia.arrayToVector(channelData);
         const bpmResult = essentia.PercivalBpmEstimator(vecBpm, TARGET_SAMPLE_RATE);
         vecBpm.delete();
 
-        // 2. 고정밀 Key 분석
         const keyResult = extractHighPrecisionKey(channelData, TARGET_SAMPLE_RATE);
         const keyStr = `${keyResult.key} ${keyResult.scale}`;
 
         bpmVal.innerText = Math.round(bpmResult.bpm);
-        bpmConfidence.innerText = `BPM 신뢰도: ${(bpmResult.confidence || 0.95).toFixed(2)}`;
+        bpmConfidence.innerText = `Confidence: ${(bpmResult.confidence || 0.95).toFixed(2)}`;
         
         keyVal.innerText = keyStr;
         camelotVal.innerText = `Camelot ${camelotMap[keyStr] || '-'}`;
 
         noticeBox.style.display = 'block';
-        await setProgress(`분석 완료 (${file.name})`, false);
+        await setProgress(`${translations[currentLang]["status-done"]} (${file.name})`, false);
       } catch (error) {
         console.error(error);
         keyVal.innerText = '-';
         bpmVal.innerText = '-';
         camelotVal.innerText = '-';
         bpmConfidence.innerText = '-';
-        await setProgress('분석에 실패했습니다. 오디오 파일을 확인하세요.', false);
+        await setProgress(translations[currentLang]["status-error"], false);
       } finally {
         dropZone.classList.remove('analyzing');
         dropIcon.innerText = '🎵';
-        dropLabel.innerText = '오디오 파일 드롭 또는 클릭하여 업로드';
-        dropSub.innerText = 'MP3, WAV, FLAC, M4A 지원';
         fileInput.value = '';
       }
     }
 
-    // 수동 탭 템포 (Tap BPM)
     let tapTimes = [];
     const tapBtn = document.getElementById('tapBtn');
     tapBtn.addEventListener('click', () => {
@@ -465,9 +546,18 @@
           intervals.push(tapTimes[i] - tapTimes[i - 1]);
         }
         const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-        const manualBpm = Math.round(60000 / avgInterval);
-        bpmVal.innerText = manualBpm;
-        bpmConfidence.innerText = '수동 탭 템포 입력';
+        bpmVal.innerText = Math.round(60000 / avgInterval);
+        bpmConfidence.innerText = translations[currentLang]["tap-input"];
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedLang = localStorage.getItem('preferred-lang');
+      if (savedLang) {
+        setLanguage(savedLang);
+      } else {
+        const userLang = navigator.language || navigator.userLanguage;
+        setLanguage(userLang.startsWith('ko') ? 'ko' : 'en');
       }
     });
   </script>
