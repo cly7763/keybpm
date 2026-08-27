@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Key & BPM Finder - Free Online Audio Key & BPM Detector</title>
   <meta name="description" content="Detect BPM, Key, and Camelot code of any audio file (MP3, WAV) locally in your browser. 100% free and fast with no file upload to servers." />
   <link rel="canonical" href="https://keyandbpm.createdmk.com/" />
@@ -13,9 +13,10 @@
 
   <style>
     :root {
-      --bg-color: #0f172a;
-      --card-bg: #1e293b;
-      --border-color: #334155;
+      --bg-color: #0b0f19;
+      --card-bg: #131b2e;
+      --card-inner: #0b1120;
+      --border-color: #1e293b;
       --accent-blue: #38bdf8;
       --accent-purple: #818cf8;
       --text-main: #f8fafc;
@@ -23,6 +24,7 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-color);
@@ -32,66 +34,77 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 1.5rem;
+      padding: 1rem 0.75rem;
     }
 
-    .top-bar {
+    .container {
       width: 100%;
-      max-width: 560px;
+      max-width: 480px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 1.5rem 1.25rem;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+
+    /* 상단 헤더 & 언어 스위처 정렬 */
+    .top-header-row {
       display: flex;
       justify-content: flex-end;
-      margin-bottom: 0.8rem;
+      margin-bottom: 0.5rem;
     }
 
     .lang-switcher {
-      display: flex;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 20px;
+      display: inline-flex;
+      background: var(--card-inner);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
       padding: 2px;
       gap: 2px;
     }
     .lang-btn {
       background: transparent;
       border: none;
-      color: #94a3b8;
-      padding: 4px 10px;
-      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 3px 8px;
+      font-size: 0.7rem;
       font-weight: 700;
       cursor: pointer;
-      border-radius: 16px;
+      border-radius: 12px;
       transition: all 0.2s ease;
     }
     .lang-btn.active {
-      background: #38bdf8;
-      color: #0f172a;
+      background: var(--accent-blue);
+      color: #0b0f19;
     }
 
-    .container {
-      width: 100%;
-      max-width: 560px;
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 20px;
-      padding: 2.2rem;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    header {
+      text-align: center;
+      margin-bottom: 1.25rem;
     }
-
-    header { text-align: center; margin-bottom: 1.8rem; }
     header h1 {
-      font-size: 1.85rem;
+      font-size: 1.6rem;
       font-weight: 800;
+      letter-spacing: -0.02em;
       background: linear-gradient(135deg, #ffffff 0%, #38bdf8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      margin-bottom: 0.4rem;
+      margin-bottom: 0.3rem;
     }
-    header p { color: var(--text-muted); font-size: 0.9rem; }
+    header p {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+      word-break: keep-all;
+      padding: 0 0.5rem;
+    }
 
+    /* 드롭존 (터치 친화형 컴팩트 레이아웃) */
     .drop-zone {
-      border: 2px dashed var(--border-color);
+      border: 1.5px dashed #334155;
       border-radius: 14px;
-      padding: 2.2rem 1.5rem;
+      padding: 1.5rem 1rem;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -100,7 +113,7 @@
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--accent-blue);
-      background: rgba(56, 189, 248, 0.05);
+      background: rgba(56, 189, 248, 0.04);
     }
     .drop-zone.analyzing {
       border-color: var(--accent-purple);
@@ -110,122 +123,177 @@
     }
 
     @keyframes pulse-border {
-      0%, 100% { border-color: rgba(129, 140, 248, 0.4); }
-      50% { border-color: rgba(56, 189, 248, 1); }
+      0%, 100% { border-color: rgba(129, 140, 248, 0.3); }
+      50% { border-color: rgba(56, 189, 248, 0.9); }
     }
 
-    .drop-icon { font-size: 2.2rem; margin-bottom: 0.6rem; display: block; }
-    .drop-label { font-weight: 600; font-size: 0.95rem; color: var(--text-main); }
-    .drop-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem; }
+    .drop-icon { font-size: 1.8rem; margin-bottom: 0.4rem; display: block; }
+    .drop-label {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text-main);
+      word-break: keep-all;
+    }
+    .drop-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
 
+    /* 상태 텍스트 & 스피너 */
     .status-container {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.6rem;
-      margin-top: 1.2rem;
-      min-height: 1.5rem;
+      gap: 0.5rem;
+      margin-top: 0.85rem;
+      min-height: 1.4rem;
+      text-align: center;
     }
     .spinner {
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       border: 2px solid rgba(56, 189, 248, 0.2);
-      border-top-color: #38bdf8;
+      border-top-color: var(--accent-blue);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       display: none;
     }
     .spinner.active { display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .status { font-size: 0.88rem; color: var(--text-muted); }
+    .status {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      word-break: keep-all;
+    }
 
+    /* 결과 카드 그리드 */
     .results {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      margin-top: 1.5rem;
+      gap: 0.75rem;
+      margin-top: 1rem;
     }
     .res-box {
-      background: #0f172a;
+      background: var(--card-inner);
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 1.2rem 1rem;
+      padding: 0.9rem 0.6rem;
       text-align: center;
     }
-    .res-title { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+    .res-title {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      word-break: keep-all;
+    }
     .res-val { 
-      font-size: 2rem; 
-      font-weight: 700; 
-      color: #38bdf8; 
-      margin-top: 0.3rem; 
-      min-height: 2.4rem; 
+      font-size: 1.6rem; 
+      font-weight: 800; 
+      color: var(--accent-blue); 
+      margin-top: 0.2rem; 
+      min-height: 2rem; 
       display: flex; 
       align-items: center; 
       justify-content: center;
+      word-break: keep-all;
     }
-    .res-sub { font-size: 0.8rem; color: #a78bfa; margin-top: 0.2rem; min-height: 1rem; }
+    .res-sub {
+      font-size: 0.75rem;
+      color: #a78bfa;
+      margin-top: 0.15rem;
+      min-height: 0.9rem;
+    }
 
+    /* 안내 박스 */
     .notice-box {
-      margin-top: 1.2rem;
-      background: rgba(234, 179, 8, 0.08);
-      border: 1px solid rgba(234, 179, 8, 0.25);
+      margin-top: 0.9rem;
+      background: rgba(234, 179, 8, 0.06);
+      border: 1px solid rgba(234, 179, 8, 0.2);
       border-radius: 10px;
-      padding: 0.75rem 0.9rem;
-      font-size: 0.8rem;
+      padding: 0.65rem 0.8rem;
+      font-size: 0.75rem;
       color: #facc15;
-      line-height: 1.4;
+      line-height: 1.35;
+      word-break: keep-all;
       display: none;
     }
 
+    /* 스켈레톤 로딩 */
     .skeleton-text {
       display: inline-block;
-      width: 70px;
-      height: 26px;
-      background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e212b 75%);
+      width: 50px;
+      height: 22px;
+      background: linear-gradient(90deg, #131b2e 25%, #1e293b 50%, #131b2e 75%);
       background-size: 200% 100%;
       animation: skeleton-move 1.4s infinite;
-      border-radius: 6px;
+      border-radius: 4px;
     }
     @keyframes skeleton-move {
       0% { background-position: 200% 0; }
       100% { background-position: -200% 0; }
     }
 
+    /* 모바일 반응형 푸터 툴 */
     .footer-tools {
-      margin-top: 1.8rem;
+      margin-top: 1.25rem;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
       border-top: 1px solid var(--border-color);
-      padding-top: 1.2rem;
-      font-size: 0.85rem;
+      padding-top: 1rem;
     }
     .tap-btn {
-      background: #0f172a;
+      flex: 1;
+      background: var(--card-inner);
       border: 1px solid var(--border-color);
       color: var(--text-main);
-      padding: 0.5rem 1rem;
+      padding: 0.55rem 0.5rem;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
+      white-space: nowrap;
+      text-align: center;
       transition: all 0.2s;
     }
-    .tap-btn:hover { background: #334155; border-color: #38bdf8; }
-    .link-home { color: var(--text-muted); text-decoration: none; font-size: 0.8rem; }
-    .link-home:hover { color: #38bdf8; }
+    .tap-btn:active {
+      transform: scale(0.97);
+      background: #1e293b;
+    }
+    .link-home {
+      flex: 1;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.75rem;
+      text-align: center;
+      white-space: nowrap;
+      padding: 0.55rem 0.2rem;
+      border-radius: 8px;
+    }
+    .link-home:hover { color: var(--accent-blue); }
+
+    /* 화면이 360px 이하로 극도로 좁은 기기 대응 */
+    @media (max-width: 360px) {
+      .container { padding: 1.2rem 0.9rem; }
+      .footer-tools { flex-direction: column; gap: 0.5rem; }
+      .tap-btn, .link-home { width: 100%; }
+    }
   </style>
 </head>
 <body>
 
-  <div class="top-bar">
-    <div class="lang-switcher">
-      <button class="lang-btn active" onclick="setLanguage('ko')" id="btn-ko">KOR</button>
-      <button class="lang-btn" onclick="setLanguage('en')" id="btn-en">ENG</button>
-    </div>
-  </div>
-
   <div class="container">
+    <div class="top-header-row">
+      <div class="lang-switcher">
+        <button class="lang-btn active" onclick="setLanguage('ko')" id="btn-ko">KOR</button>
+        <button class="lang-btn" onclick="setLanguage('en')" id="btn-en">ENG</button>
+      </div>
+    </div>
+
     <header>
       <h1>Key & BPM Finder</h1>
       <p data-i18n="header-sub">서버 전송 없이 브라우저에서 100% 로컬로 고속 분석</p>
@@ -233,7 +301,7 @@
 
     <div class="drop-zone" id="dropZone">
       <span class="drop-icon" id="dropIcon">🎵</span>
-      <div class="drop-label" id="dropLabel" data-i18n="drop-label">오디오 파일 드롭 또는 클릭하여 업로드</div>
+      <div class="drop-label" id="dropLabel" data-i18n="drop-label">오디오 파일 터치 또는 업로드</div>
       <div class="drop-sub" id="dropSub" data-i18n="drop-sub">MP3, WAV, FLAC, M4A 지원</div>
       <input type="file" id="fileInput" accept="audio/*" style="display: none;" />
     </div>
@@ -262,7 +330,7 @@
 
     <div class="footer-tools">
       <button class="tap-btn" id="tapBtn" data-i18n="tap-btn">수동 탭 템포 (Tap BPM)</button>
-      <a href="https://chordhelper.createdmk.com/" class="link-home" data-i18n="link-chordhelper">Chord Helper 바로가기 →</a>
+      <a href="https://chordhelper.createdmk.com/" class="link-home" data-i18n="link-chordhelper">Chord Helper 열기 →</a>
     </div>
   </div>
 
@@ -272,15 +340,15 @@
     const translations = {
       ko: {
         "header-sub": "서버 전송 없이 브라우저에서 100% 로컬로 고속 분석",
-        "drop-label": "오디오 파일 드롭 또는 클릭하여 업로드",
+        "drop-label": "오디오 파일 터치 또는 업로드",
         "drop-sub": "MP3, WAV, FLAC, M4A 지원",
         "res-key-title": "MAIN KEY (본조성)",
         "res-bpm-title": "TEMPO (BPM)",
         "notice-text": "💡 <strong>안내:</strong> 1절 벌스 구간(15~40초) 기준 화성 분석 결과입니다. 후반부 전조 곡의 경우 첫 키가 표시됩니다.",
         "tap-btn": "수동 탭 템포 (Tap BPM)",
-        "link-chordhelper": "Chord Helper 바로가기 →",
+        "link-chordhelper": "Chord Helper 열기 →",
         "engine-loading": "분석 엔진 로딩 중...",
-        "engine-ready": "준비 완료: 음원을 올려주세요.",
+        "engine-ready": "준비 완료: 음원을 선택해주세요.",
         "engine-failed": "WASM 엔진 초기화 실패",
         "status-reading": "오디오 읽는 중...",
         "status-analyzing": "배음 억제 및 화성 정밀 분석 중...",
@@ -290,20 +358,20 @@
       },
       en: {
         "header-sub": "100% local, high-speed audio analyzer in your browser",
-        "drop-label": "Drop audio file here or click to upload",
+        "drop-label": "Tap or upload audio file",
         "drop-sub": "Supports MP3, WAV, FLAC, M4A",
         "res-key-title": "MAIN KEY",
         "res-bpm-title": "TEMPO (BPM)",
         "notice-text": "💡 <strong>Notice:</strong> Analyzed based on the main verse (15-40s). For modulated tracks, initial key is displayed.",
         "tap-btn": "Manual Tap BPM",
-        "link-chordhelper": "Go to Chord Helper →",
+        "link-chordhelper": "Open Chord Helper →",
         "engine-loading": "Loading analysis engine...",
-        "engine-ready": "Ready: Drop an audio file to analyze.",
+        "engine-ready": "Ready: Choose an audio file.",
         "engine-failed": "Failed to initialize WASM engine",
         "status-reading": "Reading audio data...",
-        "status-analyzing": "Harmonic precision & tempo analysis in progress...",
+        "status-analyzing": "Harmonic & tempo analysis in progress...",
         "status-done": "Analysis completed",
-        "status-error": "Analysis failed. Please check your audio file.",
+        "status-error": "Analysis failed. Please check your file.",
         "tap-input": "Manual Tap Input"
       }
     };
@@ -441,7 +509,9 @@
       let detectedKey = 'C', detectedScale = 'major';
 
       for (let shift = 0; shift < 12; shift++) {
-        let dotMaj = 0, dotMin = 0, normMaj = 0, normMin = 0, normComb = 0;
+        let dotMaj = 0, dotMin = 0;
+        let normMaj = 0, normMin = 0, normComb = 0;
+
         for (let i = 0; i < 12; i++) {
           const val = combined[(i + shift) % 12];
           dotMaj += val * EDMA_MAJOR[i];
@@ -450,6 +520,7 @@
           normMin += EDMA_MINOR[i] ** 2;
           normComb += val ** 2;
         }
+
         const scoreMaj = dotMaj / (Math.sqrt(normComb) * Math.sqrt(normMaj));
         const scoreMin = dotMin / (Math.sqrt(normComb) * Math.sqrt(normMin));
 
